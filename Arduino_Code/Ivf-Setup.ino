@@ -7,11 +7,11 @@ const char* ssid = "Daksh";
 const char* password = "12345678";
 
 // ThingSpeak API Key
-String apiKey = "ZLDL4CZO6KAI73NI";
+String apiKey = "YOUR_THINGSPEAK_API_KEY";
 
 const char* server = "api.thingspeak.com";
 
-// LCD setup
+// LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Pins
@@ -23,6 +23,8 @@ int dropCount = 0;
 int totalDrops = 0;
 unsigned long lastTime = 0;
 
+bool lastState = HIGH;
+
 WiFiClient client;
 
 void setup() {
@@ -31,8 +33,8 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
-  lcd.print("Connecting WiFi");
 
+  lcd.print("Connecting...");
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -40,62 +42,69 @@ void setup() {
   }
 
   lcd.clear();
-  lcd.print("WiFi Connected");
+  lcd.print("WiFi OK");
   delay(1500);
   lcd.clear();
 }
 
 void loop() {
 
-  // Detect drops
-  if (digitalRead(sensorPin) == LOW) {
+  // Edge detection (accurate counting)
+  bool currentState = digitalRead(sensorPin);
+
+  if (lastState == HIGH && currentState == LOW) {
     dropCount++;
     totalDrops++;
-    delay(200);
   }
 
-  // Every 15 seconds
+  lastState = currentState;
+
+  // Every 15 sec
   if (millis() - lastTime > 15000) {
 
     int dripRate = dropCount * 4;
 
-    // Status & Alert
+    // Status calculation
     String status;
-    String alert;
+    if (dripRate == 0) status = "NoFlow";
+    else if (dripRate < 10) status = "Low";
+    else status = "Normal";
 
+    // WiFi Signal Strength
+    int rssi = WiFi.RSSI();   // e.g. -40 strong, -80 weak
+
+    // LCD display (clean)
+    lcd.setCursor(0, 0);
+    lcd.print("R:");
+    lcd.print(dripRate);
+    lcd.print(" T:");
+    lcd.print(totalDrops);
+
+    lcd.setCursor(0, 1);
+    lcd.print(status);
+    lcd.print(" WiFi:");
+    lcd.print(rssi);
+
+    lcd.print("   "); // clear leftovers
+
+    // Buzzer logic
     if (dripRate == 0) {
-      status = "No Flow";
-      alert = "ALERT";
-      digitalWrite(buzzerPin, HIGH);
+      digitalWrite(buzzerPin, HIGH);  // continuous alert
     }
     else if (dripRate < 10) {
-      status = "Low";
-      alert = "ALERT";
+      digitalWrite(buzzerPin, HIGH);
+      delay(150);
       digitalWrite(buzzerPin, LOW);
     }
     else {
-      status = "Normal";
-      alert = "OK";
       digitalWrite(buzzerPin, LOW);
     }
 
-    // LCD display
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Rate:");
-    lcd.print(dripRate);
-
-    lcd.setCursor(0, 1);
-    lcd.print("Tot:");
-    lcd.print(totalDrops);
-
-    // Send to ThingSpeak
+    // Send to ThingSpeak (only 2 fields)
     if (client.connect(server, 80)) {
       String url = "/update?api_key=" + apiKey +
                    "&field1=" + String(dripRate) +
-                   "&field2=" + String(totalDrops) +
-                   "&field3=" + status +
-                   "&field4=" + alert;
+                   "&field2=" + String(totalDrops);
 
       client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                    "Host: " + server + "\r\n" +
