@@ -6,7 +6,8 @@
 const char* ssid = "Daksh";
 const char* password = "12345678";
 
-String apiKey = "YOUR_THINGSPEAK_API_KEY";
+// ThingSpeak API Key
+String apiKey = "Key_Here";
 const char* server = "api.thingspeak.com";
 
 // LCD
@@ -24,9 +25,9 @@ bool lastState = HIGH;
 
 WiFiClient client;
 
-// ✨ Scroll text function
+// Startup scroll
 void scrollText(String text, int row) {
-  for (int i = 0; i < text.length() - 15; i++) {
+  for (int i = 0; i <= text.length() - 16; i++) {
     lcd.setCursor(0, row);
     lcd.print(text.substring(i, i + 16));
     delay(250);
@@ -40,8 +41,7 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  // ✨ Startup animation
-  scrollText(" Smart IV Monitoring System ", 0);
+  scrollText(" Smart IVF Monitoring System ", 0);
 
   lcd.clear();
   lcd.print("Connecting WiFi");
@@ -60,7 +60,7 @@ void setup() {
 
 void loop() {
 
-  // Drop detection
+  // Detect drops
   bool currentState = digitalRead(sensorPin);
 
   if (lastState == HIGH && currentState == LOW) {
@@ -70,47 +70,29 @@ void loop() {
 
   lastState = currentState;
 
-  // Every 15 sec
+  // Update every 15 sec
   if (millis() - lastTime > 15000) {
 
     int dripRate = dropCount * 4;
 
-    // Status
-    String status;
-    if (dripRate == 0) status = "NoFlow";
-    else if (dripRate < 10) status = "Low";
-    else status = "Normal";
-
-    int rssi = WiFi.RSSI();
-
-    // ✨ Smooth LCD update
+    // LCD display
+    lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("R:");
+    lcd.print("Drop Rate:");
     lcd.print(dripRate);
-    lcd.print(" T:");
-    lcd.print(totalDrops);
-    lcd.print("   ");
 
     lcd.setCursor(0, 1);
-    lcd.print(status);
-    lcd.print(" WiFi:");
-    lcd.print(rssi);
-    lcd.print("   ");
+    lcd.print("Total:");
+    lcd.print(totalDrops);
 
     // Buzzer
     if (dripRate == 0) {
       digitalWrite(buzzerPin, HIGH);
-    }
-    else if (dripRate < 10) {
-      digitalWrite(buzzerPin, HIGH);
-      delay(150);
-      digitalWrite(buzzerPin, LOW);
-    }
-    else {
+    } else {
       digitalWrite(buzzerPin, LOW);
     }
 
-    // Send data
+    // Send to ThingSpeak
     if (client.connect(server, 80)) {
       String url = "/update?api_key=" + apiKey +
                    "&field1=" + String(dripRate) +
